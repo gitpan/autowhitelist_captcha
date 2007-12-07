@@ -866,6 +866,7 @@ sub sendEmail {
 
 		undef $image;	# free mem
 
+		$parser->{rctp_email} = $recipient_email;
 		$parser->{mail_from} = "autowhitelist_captcha_" . $md5 . '@' . $domain;
 
 	} else {
