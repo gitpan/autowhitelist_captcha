@@ -1,0 +1,1043 @@
+=head1 NAME
+
+autowhitelist_captcha Version 1.0 by Marc Sebastian Pelzer http://search.cpan.org/~mpelzer/
+
+=head1 DESCRIPTION
+
+This plug-in is a whitelist which automatically maintains itself based on well known and widely
+used CAPTCHA authenication.
+
+When you activate this plug-in, it starts to maintain a file called "config/autowhitelist_captcha.whitelist"
+which contains a list of all sender email addresses that are allowed to send mail. If one sends an
+email with a sender address that is unknown to this list, this plug-in will send an email to the
+senders email (or reply-to email) which contains a CAPTCHA image and some explanatory text. The
+user needs to send a replay to this email containing the solved CAPTCHA which will be detected and
+handled by this plug-in then. If the CAPTCHA is OK, the senders email will be added to the whitelist
+and he will be able to send email without and disturbance from this moment on. If the CAPTCHA is not
+OK, a new email with a fresh generated CAPTCHA is being send for a maximum of 5 times until we get
+a good response or the user gives up. If the user FAIL to solve the CAPTCHA within 5 tries, he will
+be added to the file "config/autowhitelist_captcha.blacklist" which is the blacklist equivalent. If
+you want to give a user new 5 tries, simply remove his email from the blacklist.
+
+So, all in all three files are auto-generated and maintained by this plugin:
+
+ config/autowhitelist_captcha.whitelist		Contains all whitelisted email addresses
+ config/autowhitelist_captcha.blacklist		Contians all emails that finaly fail to solve the captcha
+ config/autowhitelist_captcha.pending		Contains all emails with CAPTCHA solving in pending
+
+The pending database is a DBM file because its way more easy to handle the stuff that I want to
+keep in a hash instead of a flat file. If you want to take a look into the file or if you want
+to manipulate its content, use a small Perl script like this:
+
+--- 8< -----------------------------------------------------------------------------------------
+#!/usr/bin/perl
+
+use DB_File::Lock;
+
+tie(%db, 'DB_File::Lock', 'autowhitelist_captcha.pending', O_RDWR|O_CREAT, 0600, $DB_HASH, 'write') || die "error: $!";
+
+foreach $email (keys %db) {
+
+	($md5, $counter) = ($db($email} =~ m!^([^\:]+)\:(\d+)!);
+
+	print "email = '$email', md5 = '$md5', failure counter = '$counter'\n";
+}
+
+untie(%db);
+
+--- 8< -----------------------------------------------------------------------------------------
+
+Generated CAPTCHAS are valid for one day by default. After that time, they expire in the database
+that is maintained by the Authen::Captcha Perl module. If you want to change the expiry, just
+seek for the line containing 'expire => 3600' and change the number in seconds.
+
+By default, CAPTCHA images are generated to the /tmp directory. Make sure, that your qpsmtpd user can
+read and write to this directory. If you want to change the location, seek for the lines
+
+data_folder => '/tmp',
+output_folder => '/tmp',
+
+and change them to the folder you like. The images will be deleted when the user solved or fail
+to solve the CAPTCHA or when they have expired.
+
+=head1 REQUIREMENTS
+
+This plug-in needs the following Perl modules installed from CPAN:
+
+Authen::Captcha
+DB_File::Lock
+GD
+Digest::MD5 (standard perl module)
+MIME::Base64 (standard perl module)
+Net::SMTP (standard perl module)
+
+If you dont have them, get them via "perl -MCPAN -e shell".
+
+IMPORTANT: as of version 1.023 the Perl module Authen::Captcha is not taint-safe. This means that it barfs
+when being called with 'perl -T' - that is what qpsmtpd does. In order to make it taint safe, apply this
+patch to your Authen/Captcha.pm file (mine is living in /usr/local/share/perl/5.8.8/Authen/):
+
+Source: http://bugs.debian.org/cgi-bin/bugreport.cgi?bug=409731
+
+--- 8< -----------------------------------------------------------------------------------------
+
+--- Authen/Captcha.pm-orig	2007-02-05 11:25:13.000000000 +1100
++++ Authen/Captcha.pm	2007-02-05 11:26:22.000000000 +1100
+@@ -232,7 +232,11 @@
+ 	foreach my $line (@data) 
+ 	{
+ 		$line =~ s/\n//;
+-		my ($data_time,$data_code) = split(/::/,$line);
++
++		#
++		# Extract untainted time and code
++		#
++		my ($data_time,$data_code) = $line =~ m/(^\d+)::([[:xdigit:]]{32})$/;
+ 		
+ 		my $png_file = File::Spec->catfile($self->output_folder(),$data_code . ".png");
+ 		if ($data_code eq $crypt)
+@@ -351,7 +355,12 @@
+ 	foreach my $line (@data) 
+ 	{
+ 		$line =~ s/\n//;
+-		my ($data_time,$data_code) = split(/::/,$line);
++
++		#
++		# Extract untainted time and code
++		#
++		my ($data_time,$data_code) = $line =~ m/(^\d+)::([[:xdigit:]]{32})$/;
++
+ 		if ( (($current_time - $data_time) > ($self->expire())) ||
+ 		     ($data_code  eq $md5) )
+ 		{	# remove expired captcha, or a dup
+
+--- 8< -----------------------------------------------------------------------------------------
+
+You may also have a look at the Captcha/images/ directory and replace the PNG images with better
+readable ones.
+
+Also, if you run another qpsmtpd plug-in that check if the recipient exists, like "check_rcptto_exists",
+you should add a line like:
+
+if ($recipient->user =~ m!^autowhitelist_captcha_!) { return DECLINED; }          # allow all autowhitelist mails to pass
+
+into it's method hook_rcpt() in order to allow response emails to the CAPTCHA mails. The reply email
+address will be like this:
+
+autowhitelist_captcha_a8ffe2e890f22fa971bb@yourdomain.com
+
+This is a 'fake' email address that contains the original md5-sum and will be catched and processed
+by this plug-in! Make sure, that this emails can pass through your other plug-ins that run before this
+one.
+
+=head1 INSTALLATION
+
+I tried to make the configuration of this plug-in as simple as possible. Nevertheless, some parameters are
+needed in order to make it work on your system. But please, dont give up - it's worth it :)
+
+Please copy the plug-in into the qpsmtpd's plug-in directory:
+
+plugins/autowhitelist_captcha
+
+and edit the file
+
+config/plugins
+
+Add the plug-in's name somewhere in the upper section of the file.
+
+Here is an example config file entry:
+
+autowhitelist_captcha active
+
+This plug-in can be called with one parameter 'active'. If this parameter is not set, we run in a 'dry-mode'. This
+means, that we accept all incoming mails and just write to the logfile what would happen if... This way you can run
+this plug-in without any damage and see if it works for you or not wihtout any email getting rejected. Just do a
+
+tail -f /var/log/qpsmtpd*.log | grep autowhitelist
+
+and see whats going on. When you'r sure that everything is good, then add the optional 'active' parameter and run
+your autowhitelist full featured.
+
+=head1 CONFIGURATION
+
+A configuration file is needed in order to run this plg-in. Create a file called
+
+config/autowhitelist_captcha
+
+which looks like this:
+
+--- 8< -----------------------------------------------------------------------------------------
+ # config for autowhitelist_captcha
+ #
+
+ # one or more whitelist=/path/to/whitelist
+ #
+ whitelist=config/relayclients
+ whitelist=/usr/local/exim/local.networks
+
+ # email templates for initial and failure CAPTCHA emails
+ #
+ template=config/autowhitelist_captcha.first-email.template
+ failure_template=config/autowhitelist_captcha.failure.template
+ success_template=config/autowhitelist_captcha.success.template
+
+ # local mailserver for ougoing CAPTCHA emails
+ #
+ mailhost=localhost:2525
+
+ # whitelisting only for the following maildomains:
+ #
+ whitelist_domain=test1.com
+ whitelist_domain=test2.org
+
+ # whitelisting only for the following emails:
+ #
+ whitelist_email=test@test.net
+ whitelist_email=user@mydomain.com
+
+--- 8< -----------------------------------------------------------------------------------------
+
+As you can see, parameters are passed over as key=value pairs. The following keys's are possible:
+
+whitelist=/path/to/your/own/whitelist
+
+	Path + Filename to your own (dynamicly generated) whitelist which contains one email or IP or hostname per line.
+	Can be used multiple times to point to different whitelist-files! It's highly recommended to point to your
+	(dynamicly generated) list of RELAY IP and/or hostnames. Otherwise also all emails that should be routet to
+	the outside world (outgoing emails) will be handled through this module! So, if you have a list of RELAY IP's,
+	add something like:
+	
+	whitelist=config/relayclients
+	
+	which looks like this:
+	
+	# this is config/relayclients
+	#
+	127.0.0.1
+	192.168.1.*
+	192.168.55.1
+	192.168.55.99
+	*.mydomain.de
+	mydomain.*
+	[...]
+
+mailhost=localhost:2525
+
+	This is the IP/hostname and tcp port of your local mailer that handles outgoing mails. We need this
+	information in order to send emails which contains the CAPTCHA. Mails are sent using the Perl module
+	Net::SMTP. Please costumize outgoing mail code if you have a special mail environment that does not
+	fit the default. Seek the line 'Net::SMTP->new' and you see the code that send the CAPTCHA email.
+
+firstmail_template=config/autowhitelist_captcha.first-email.template
+
+	This line points to the path+filename of the email template that is used to send the CAPTCHA email.
+	Please modify it to fit your needs and preferred language. Make sure, that two variables are still
+	inside the template:
+	
+	{autowhitelist_captcha:imageBASE64}		The base64 encoded CAPTCHA image (PNG)
+	
+	{autowhitelist_captcha:rctp_email}		The recipient email address that the sender tried to send an
+											email to. This is mostly your email address or one of your
+											mail users.
+
+	This template is being sent to the sender when he send you an email for the first time. So it's important
+	that the text explains exactly whats going on and what the he should do to succeed with the CAPTCHA. You
+	should explain what a CAPTCHA is for users who doesnt know it and you should also explain, that the
+	CAPTCHA characters and numbers should be entered inside the [        ] brackets within the reply to the
+	email - otherwise we cant extract the CAPTCHA response from the reply email.
+
+failure_template=config/autowhitelist_captcha.failure.template
+
+	This is almost the same as 'template' - a path and filename to an email template. This one gets send
+	if a user send a wrong response to a CAPTCHA. So this means that we can use this template to explain
+	a bit more what a CAPTCHA is and why he should reply to it. Also we can tell the user that his former
+	answer wa wrong.
+	
+	The difference to 'template' is, that only one variable is available this time:
+	
+	{autowhitelist_captcha:imageBASE64}     The base64 encoded CAPTCHA image (PNG)
+
+success_template=config/autowhitelist_captcha.success.template
+
+	This template will be send to the user when he successfully solved the Captcha. It should explain, that
+	he is now able to communicate with the recipient with ever need to solve a Captcha again. He should
+	also be reminded to send his initial e-mail again, which has been blocked by this plug-in.
+
+whitelist_domain=mydomain.com
+
+	This line defines one or more domains that you want to autowhitelist. Every domain that you define will
+	be affected by this plug-in. If you want to autowhitelist all of your domains, simply write:
+
+	whitelist_domain=*
+
+whitelist_email=test@test.net
+
+	This is almost the same as whitelist_domain but instead for single emails. You can specify one or more
+	emails that should be handled by this plug-in by adding one or multiple lines of whitelist_email.
+
+=head1 CHANGELOG
+
+Version 1.0 	Thu Dec  6 2007			Initial release			Marc Sebastian Pelzer
+
+=head1 TODO
+
+- Provide a set of better Authen::Captcha images with this package
+
+	
+=cut
+
+use Authen::Captcha;
+use Net::SMTP;
+use DB_File::Lock;
+use MIME::Base64;
+use POSIX qw(strftime);
+use Data::Dumper;
+use MIME::Parser;
+
+sub register {
+
+	my ($self, $qp, @args) = @_;
+	my ($k, $v, $line, @config);
+
+	# handle arguments
+	#
+	if (grep (/active/, @args)) {
+
+		$self->log(LOGINFO, "Running in ACTIVE mode. This means that we reject connections based on the defined rules!");
+	
+		$self->{_mode} = 'active';
+
+	} else {
+
+		$self->log(LOGINFO, "Running in DRY-RUN mode. This means that we do not reject any connections but instead print some debug messages what would happen.");
+	
+		$self->{_mode} = 'dry-run';
+	}
+
+	# read the config file
+	#
+	@config = $self->qp->config("autowhitelist_captcha");
+	
+	unless (@config) { die "Missing configuration-file 'config/autowhitelist_captcha'! Please create this file and make sure we can read it."; }
+
+	foreach $line (@config) {
+
+		if ($line =~ m!^\s*\#!) { next; }		# skip comments
+
+		($k,$v) = ($line =~ m!^\s*([^\s\=]+)\s*\=\s*(.+)!);
+
+		if ($k eq "mailhost" && $v =~ m!^[^\:]+\:\d+!) {
+
+			$self->{config}->{_mailhost} = $v;
+			
+		} elsif ($k eq "firstmail_template") {
+		
+			if (-e $v && -r $v) {
+			
+				$self->{config}->{_firstmail} = $v;
+
+			} else {
+			
+				$self->{_inactive} = 1;
+				$self->log(LOGCRIT, "Bad argument 'firstmail_template': cant access or read the given file '$v'. Maybe a permission problem?");
+			}
+
+		} elsif ($k eq "failure_template") {
+		
+			if (-e $v && -r $v) {
+			
+				$self->{config}->{_failuremail} = $v;
+
+			} else {
+				
+				$self->{_inactive} = 1;
+				$self->log(LOGCRIT, "Bad argument 'failure_template': cant access or read the given file '$v'. Maybe a permission problem?");
+			}
+
+		} elsif ($k eq "success_template") {
+		
+			if (-e $v && -r $v) {
+			
+				$self->{config}->{_successmail} = $v;
+
+			} else {
+			
+				$self->{_inactive} = 1;
+				$self->log(LOGCRIT, "Bad argument 'success_template': cant access or read the given file '$v'. Maybe a permission problem?");
+			}
+
+		} elsif ($k eq "whitelist") {
+		
+			if (-e $v && -r $v) {
+			
+				push @{$self->{config}->{_whitelists}}, $v;
+				
+			} else {
+			
+				$self->{_inactive} = 1;
+				$self->log(LOGCRIT, "Bad argument 'whitelist': cant access or read the given file '$v'. Maybe a permission problem?");
+			}
+
+		} elsif ($k eq "whitelist_domain") {
+		
+			if ($v eq '*') {
+			
+				$self->{config}->{_active_for_all_domains} = 1;
+			
+			} else {
+
+				push @{$self->{config}->{_whitelist_domains}}, $v;
+			}
+
+		} elsif ($k eq "whitelist_email") {
+
+			push @{$self->{config}->{_whitelist_emails}}, $v;
+		}
+	}
+
+	push @{$self->{config}->{_whitelists}}, "config/autowhitelist_captcha.whitelist";		# we always check our own whitelist too
+
+	if (! $self->{config}->{_whitelist_domains} && ! $self->{config}->{_active_for_all_domains} && ! $self->{config}->{_whitelist_emails}) {
+	
+		$self->{_inactive} = 1;
+		$self->log(LOGCRIT, "You should at least specify one whitelist_domain or whitelist_email that should be used with this plug-in! Please check you config-file!");
+	}
+
+	unless ($self->{config}->{_mailhost}) {
+
+		$self->{_inactive} = 1;
+		$self->log(LOGCRIT, "Bad argument 'mailhost': need a hostname and a port, like 'localhost:2525' where we can deliver our CAPTCHA emails to!");
+	}
+
+	unless ($self->{config}->{_firstmail} && $self->{config}->{_failuremail} && $self->{config}->{_successmail}) {
+	
+		$self->{_inactive} = 1;
+		$self->log(LOGCRIT, "You need to specify the three email templates: firstmail, failure and success. Please take a look at the inline documentation!");
+	}
+
+	#$self->log(LOGDEBUG, "Config DUMP: " . Dumper($self->{config}));
+}
+
+sub hook_mail {
+
+	my ($self, $transaction, $sender) = @_;
+	my ($sender_email, $line, $whitelist, $md5);
+
+	if ($self->{_inactive}) {
+	
+		$self->log(LOGCRIT, "This plug-in is INACTIVE due to critical configuration errors!");
+
+		return DECLINED;
+	}
+
+	my $remote_ip = $self->qp->connection->remote_ip;
+	my $remote_host = $self->qp->connection->remote_host;
+
+	$sender_email = $sender->user . '@' . $sender->host;
+
+	# check if the peers IP, hostname or the "mail from" email address is whitelisted
+	#
+	foreach $whitelist (@{$self->{config}->{_whitelists}}) {
+
+		if (-e $whitelist && -r $whitelist) {
+
+			open (WHITELIST, $whitelist);
+
+			while ($line = <WHITELIST>) {
+
+				chomp($line);
+
+				if ($line =~ /^\d{1,3}\.[\d\.\*]+/) {
+
+					# IP address match
+					#
+					if ($remote_ip =~ m!$line!) { close (WHITELIST); $self->log(LOGDEBUG, "Remote IP address '$remote_ip' match whitelist '$whitelist' in line '$line'."); return DECLINED; }
+
+				} elsif ($line =~ m!^[^\@]+\@!) {
+
+					# email address match
+					#
+					if ($sender_email =~ m!$line!i) { close (WHITELIST); $self->log(LOGDEBUG, "Remote senders email address '$sender_email' match whitelist '$whitelist' in line '$line'."); return DECLINED; }
+
+				} elsif ($line =~ m!^\w+\.!) {
+
+					# hostname match
+					#
+					if ($remote_host =~ m!$line!i) { close (WHITELIST); $self->log(LOGDEBUG, "Remote hostname '$remote_host' match whitelist '$whitelist' in line '$line'."); return DECLINED; }
+				}
+			}
+
+			close (WHITELIST);
+		}
+	}
+
+	# also check if the sender is blacklisted already
+	#
+	open (BLACKLIST, "config/autowhitelist_captcha.blacklist");
+
+	while ($line = <BLACKLIST>) {
+	
+		chomp($line);
+
+		if ($sender_email =~ m!$line!) {
+		
+			$self->log(LOGNOTICE, "Sender '$sender_email' is blacklisted. We DENY this mail.");
+		
+			close (BLACKLIST);
+
+			if ($self->{_mode} eq 'active') { RETURN (DENY, "Sorry, you are not allowed to send email to this server. Please contact the postmaster."); } else { return DECLINED; }
+		}
+	}
+
+	close (BLACKLIST);
+
+
+	# We make ourself a note for hook_rcpt and let it pass through.
+	#
+	$transaction->notes("autowhitelist_captcha.sender_email", $sender_email);
+
+	$self->log(LOGDEBUG, "Ok, sender is not white/blacklisetd. Make our-self a notice and let pass through.");
+
+	return DECLINED;
+}
+
+sub hook_rcpt {
+
+	my ($self, $transaction, $recipient) = @_;
+	my ($captcha_string, $md5, $email, $counter, $recipient_email, $inactive);
+
+	if ($self->{_inactive}) {
+	
+		$self->log(LOGCRIT, "This plug-in is INACTIVE due to critical configuration errors!");
+
+		return DECLINED;
+	}
+
+	$recipient_email = $recipient->user . '@' . $recipient->host;
+
+	$inactive = 0;
+
+	# remember the recipient host for hook_data_post
+	#
+	$transaction->notes("autowhitelist_captcha.recipient_host", $recipient->host);
+
+	# check if the recipients domain should be whitelisted or not
+	#
+	if (($self->{config}->{_whitelist_domains} && ! &mygrep($recipient->host, $self->{config}->{_whitelist_domains})) && ! $self->{config}->{_active_for_all_domains}) {
+	
+		++$inactive;
+
+	} else {
+
+		$self->log(LOGNOTICE, "Recipients domain '" . $recipient->host . "' is an active autowhitelist domain!");
+	}
+	
+	# check if the recipient email should be whitelisted or not
+	#
+	if ($self->{config}->{_whitelist_emails} && ! &mygrep($recipient_email, $self->{config}->{_whitelist_emails}) && $recipient->user !~ m!^autowhitelist_captcha_.+!) {
+
+		++$inactive;
+
+	} else {
+
+		$self->log(LOGNOTICE, "Recipients email '" . $recipient_email . "' is an active autowhitelist email!");
+	}
+
+	# check if autowhitelisting should be activated for this connection
+	#
+	if ($inactive == 2) { return DECLINED; }
+	
+	
+	if ($recipient->user =~ m!^autowhitelist_captcha_([a-fA-F0-9]+$)!i) {
+
+		# replay email to a former send CAPTCHA. We make our-self a note for hook_data_post
+		#
+		$transaction->notes("autowhitelist_captcha.md5", $1);
+
+		$self->log(LOGDEBUG, "Found a reply mail to a former send CAPTCHA. Make our-self a notice and let pass through.");
+
+		return DECLINED;
+
+	} elsif ($transaction->notes("autowhitelist_captcha.sender_email")) {
+
+		# ok, we got a notice from our-self (hook_mail) that the sender is not whitelisted. As this is NOT a reply to the CAPTCHA email, we
+		# check now if the user has already gotten a CAPTCHA or not. It not, we add him to the pending database and send a CAPTCHA mail.
+		#
+		($md5, $email, $counter) = &pendingDatabase({'action' => 'get', 'email' => $transaction->notes("autowhitelist_captcha.sender_email")});
+
+		if ($counter >= 10) {
+
+			$self->log(LOGNOTICE, "User with email address '$email' failed already for ten times to solve or respond to the CAPTCHA. We DENY this mail.");
+
+			if ($self->{_mode} eq 'active') { return (DENY, "Sorry, you are not allowed to send email unless you returned the latest CAPTCHA e-mail. Please check your INBOX."); } else { return DECLINED; } 
+
+		} else {
+
+			unless ($md5) {
+			
+				# add a new user entry
+				#
+				$md5 = &sendEmail($self, $self->{config}->{_firstmail}, $recipient->host, $transaction->notes("autowhitelist_captcha.sender_email"), $recipient_email);
+
+				unless ($md5) { if ($self->{_mode} eq 'active') { return (DENYSOFT, "Temporary error. Please try again later."); } else { return DECLINED; } }
+
+				&pendingDatabase({'action' => 'add', 'md5' => $md5, 'email' => $transaction->notes("autowhitelist_captcha.sender_email"), 'recipient' => $recipient_email});
+
+				$self->log(LOGNOTICE, "Add a new user '" .$transaction->notes("autowhitelist_captcha.sender_email") . "' to our pending database and send a fresh CAPTCHA email.");
+
+				if ($self->{_mode} eq 'active') { return (DENY, "Sorry, you are not allowed to send email to this server before solving a CAPTCHA. Please check your INBOX."); } else { return DECLINED; }
+
+			} else {
+			
+				# send a new CAPTCHA to a known user and increment his failure counter
+				#
+				$md5 = &sendEmail($self, $self->{config}->{_failuremail}, $recipient->host, $transaction->notes("autowhitelist_captcha.sender_email"), $recipient_email);
+
+				unless ($md5) { if ($self->{_mode} eq 'active') { return (DENYSOFT, "Temporary error. Please try again later."); } else { return DECLINED; } }
+
+				&pendingDatabase({'action' => 'set', 'md5' => $md5, 'email' => $transaction->notes("autowhitelist_captcha.sender_email"), 'counter' => ++$counter});
+
+				$self->log(LOGERROR, "Send a new CAPTCHA email to '" . $transaction->notes("autowhitelist_captcha.sender_email") . "'. Failure counter is $counter");
+
+				if ($self->{_mode} eq 'active') { return (DENY, "Sorry, you are not allowed to send email to this server before solving a CAPTCHA. Please check your INBOX."); } else { return DECLINED; }
+			}
+		}
+	
+	} else {
+
+		return DECLINED;		# nothing to do for us
+	}
+}
+
+sub hook_data_post {
+
+	my ($self, $transaction) = @_;
+	my ($md5, $email, $counter, $result, $recipient, $captcha_string, $mailbody, $parser, $entity);
+	my (@parts, $pa, $me, $data);
+
+	if ($self->{_inactive}) {
+	
+		$self->log(LOGCRIT, "This plug-in is INACTIVE due to critical configuration errors!");
+
+		return DECLINED;
+	}
+
+	if ($transaction->notes("autowhitelist_captcha.md5") && $transaction->notes("autowhitelist_captcha.sender_email")) {
+	
+		# ok, we have CAPTCHA return email here
+		#
+		$md5 = $transaction->notes("autowhitelist_captcha.md5");
+
+		$self->log(LOGNOTICE, "Found a reply to one of our former send CAPTCHA emails. md5='$md5'.");
+		
+		# check if we have a pending CAPTCHA with this md5
+		#
+		(undef, $email, $counter) = &pendingDatabase({'action' => 'get', 'md5' => $md5});
+
+		unless ($email) {
+		
+			$self->log(LOGERROR, "Critical: invalid recipient address found '" . $recipient->user . "', md5='$md5'. The md5 is not known in our pending database! We DENY this mail.");
+		
+			if ($self->{_mode} eq 'active') { return (DENY, "Sorry, invalid recipient address found. The email address is not known here."); } else { return DECLINED; }
+		}
+
+		if ($transaction->header->get('MIME-Version')) {
+
+			# handle a MIME multipart mailbody
+			#
+			$parser = new MIME::Parser;
+			
+			$parser->tmp_to_core(1);
+			$parser->output_to_core(1);
+			 
+			eval { $entity = $parser->parse_data($transaction->header->as_string() . "\n" . $transaction->body_as_string()) };
+
+			@parts = $entity->parts();
+
+			unless (@parts) {
+			
+				# fall-back if MIME message could not be parsed; see what we can do with the raw msg ...
+				#
+				$mailbody = $transaction->header->as_string() . "\n" . $transaction->body_as_string();
+
+			} else {
+
+				# just dump the whole structure - thats good enough for our simple captcha-string regexp
+				#
+				$mailbody = Dumper(@parts);
+			}
+
+			$mailbody =~ s!\&nbsp\;! !g;	# replace non-breaking-spaces
+
+			#$self->log(LOGDEBUG, "Found MIME multipart mailbody: " . $mailbody);
+
+			undef $parser;
+			undef $entity;
+			undef $data;
+			undef @parts;
+
+		} else {
+		
+			$mailbody = $transaction->body_as_string;
+		}
+
+		
+		if ($mailbody =~ m!\[\s*([a-zA-Z0-9]{6})\s*\]!) {
+
+			# ok, found a potential CAPTCHA string, like [  afww2q  ]
+			#
+			$captcha_string = $1;
+			$captcha_string = lc($captcha_string);		# make it lower-case
+
+			undef $mailbody;
+
+			$self->log(LOGDEBUG, "Found a CAPTCHA string inside the email body: '$captcha_string'");
+			
+			my $c = &captcha();		# get a Authen::Captcha object
+			
+			my $result = $c->check_code($captcha_string, $md5);
+			
+			if ($result == 0) {
+			
+				$self->log(LOGERROR, "Could not check CAPTCHA code: could not read the Authen::Captcha database 'codes.txt' file! Please fix this error. We DENYSOFT this mail.");
+				
+				if ($self->{_mode} eq 'active') { return (DENYSOFT, "Temporary error. Please try again later."); } else { return DECLINED; }
+
+			} elsif ($result == 1) {
+			
+				# ok, found a valid CAPTCHA response here
+				#
+				&pendingDatabase({'action' => 'delete', 'email' => $email});
+
+				$self->log(LOGNOTICE, "Found a valid CAPTCHA response! Adding email '$email' to our whitelist. Done with this email!");
+				
+				open (WHITELIST, ">> config/autowhitelist_captcha.whitelist") || $self->log(LOGERROR, "Critical: could not open file 'config/autowhitelist_captcha.whitelist' for WRITING!");
+				print WHITELIST $email . "\n";
+				close (WHITELIST);
+			
+				# make our-self a note for hook_hook_queue
+				#
+				$transaction->notes("autowhitelist_captcha.success", 1);
+
+				# also send the success email
+				#
+				&sendEmail($self, $self->{config}->{_successmail}, $transaction->notes("autowhitelist_captcha.recipient_host"), $email, undef, 1);
+
+				return DECLINED
+			
+			} elsif ($result == -1) {
+			
+				$self->log(LOGERROR, "Could not check CAPTCHA. Code has expired! DENYing this mail.");
+				
+				if ($self->{_mode} eq 'active') { return (DENY, "Sorry, your CAPTCHA response arrives too late. The CAPTCHA has expired. Please get a new one and try again."); } else { return DECLINED; }
+			
+			} elsif ($result == -2 || $result == -3) {
+			
+				# count up the failure counter in the pending database
+				#
+				if ($counter >= 5) {
+
+					$self->log(LOGERROR, "CAPTCHA code with md5 '$md5' and given code '$captcha_string' is not known in our database or does not match the crypt (invalid code)! We DENY this mail AND blacklist the user '$email' because of the maximum failure.");
+				
+					open (BLACKLIST, ">> config/autowhitelist_captcha.blacklist") || $self->log(LOGERROR, "Critical: could not open file 'config/autowhitelist_captcha.blacklist' for WRITING!");
+					print BLACKLIST $email . "\n";
+					close (BLACKLIST);
+					
+					if ($self->{_mode} eq 'active') { return (DENY, "Sorry, your CAPTCHA response is invalid. Giving up."); } else { return DECLINED; }
+
+				} else {
+				
+					# send a new CAPTCHA to $email
+					#
+					$self->log(LOGERROR, "CAPTCHA code with md5 '$md5' and given code '$captcha_string' is not known in our database or does not match the crypt (invalid code)! We DENY this mail and send a new CAPTCHA code to the user '$email'. Failure counter is $counter");
+
+					$md5 = &sendEmail($self, $self->{config}->{_failuremail}, $transaction->notes("autowhitelist_captcha.recipient_host"), $email);
+					
+					unless ($md5) { if ($self->{_mode} eq 'active') { return (DENYSOFT, "Temporary error. Please try again later."); } else { return DECLINED; } }
+
+					&pendingDatabase({'action' => 'set', 'md5' => $md5, 'email' => $email, 'counter' => ++$counter});
+					
+					if ($self->{_mode} eq 'active') { return (DENY, "Sorry, your CAPTCHA response is invalid. I've send you a new one! Please give it another try."); } else { return DECLINED; }
+				}
+			
+			} else {
+
+				$self->log(LOGERROR, "Critical: does not get any return code from Authen::Captcha->check_code(). We DENYSOFT this mail.");
+				
+				if ($self->{_mode} eq 'active') { return (DENYSOFT, "Temporary error. Please try again later."); } else { return DECLINED; }
+			}
+
+		} else {
+		
+			# no CAPTCHA string found in the mailbody :(
+			#
+			$self->log(LOGERROR, "Could not find the CAPTCHA response string inside the mailbody. We DENY this mail.");
+
+			return (DENY, "Sorry, cant find a CAPTCHA response string inside this email. Please make sure you entered the string correctly as described.");
+		}
+	}
+
+	undef $mailbody;
+
+	return DECLINED;
+}
+
+sub hook_queue {
+
+	 my ($self, $transaction) = @_;
+
+	if ($self->{_inactive}) {
+	
+		$self->log(LOGCRIT, "This plug-in is INACTIVE due to critical configuration errors!");
+
+		return DECLINED;
+	}
+
+	if ($transaction->notes("autowhitelist_captcha.success")) {
+	
+		# throw this mail into the black-hole
+		#
+		return OK;
+
+	} else {
+
+		return DECLINED;		# not our business
+	}
+}
+
+
+sub captcha {
+
+	# create and return a new Authen::Captcha object
+	#
+	return Authen::Captcha->new(
+
+		data_folder => '/tmp',
+		output_folder => '/tmp',
+		width => 100,
+		height => 120,
+		expire => 3600,
+	);
+}
+
+sub sendEmail {
+
+	# create a fresh CAPTCHA image and send an email using Net::SMTP
+	#
+	my ($self, $useTemplate, $domain, $sender_email, $recipient_email, $successmail_flag) = @_;
+	my ($md5, $c, $image, $template, $parser, $smtp, $starttime);
+
+	$self->log(LOGDEBUG, "Going to send an email to '$sender_email' with domain '$domain', using email template '$useTemplate' ...");
+
+	unless (-e $useTemplate && -r $useTemplate) {
+	
+		$self->log(LOGCRIT, "Critical: unable to open the defined email template '$useTemplate'! Please make sure that it exists and we have read permission!");
+		
+		return undef;
+	}
+
+	unless ($successmail_flag) {
+
+		# create a CAPTCHA image
+		#
+		$parser->{boundary} = &make_random_hash();
+
+		$c = &captcha();		# get a new Authen::Captcha object
+
+		eval { $md5 = $c->generate_code(6) };
+
+		$image = $c->output_folder . "/" . $md5 . ".png";
+
+		unless (-e $image && -r $image && $md5) {
+	
+			$self->log(LOGCRIT, "Critical: unable to create CAPTCHA image file! Check the defined data_folder and output_folder for write permissions! $@");
+		
+			return undef;
+		}
+	
+		open (IMAGE, $image);
+		{
+			local $/ = undef;
+			$image = <IMAGE>;
+		}
+		close (IMAGE);
+		
+		$parser->{imageBASE64} = encode_base64($image);
+
+		undef $image;	# free mem
+
+		$parser->{mail_from} = "autowhitelist_captcha_" . $md5 . '@' . $domain;
+
+	} else {
+
+		# we dont need a CAPTCHA image for the success email
+		#
+		$parser->{mail_from} = 'autowhitelist_captcha-donotreply@' . $domain;
+	}
+		
+	open (TEMPLATE, $useTemplate);
+	{
+		local $/ = undef;
+		$template = <TEMPLATE>;
+	}
+	close (TEMPLATE);
+
+	# parse the template variables
+	#
+	$template =~ s!\{autowhitelist_captcha\:([a-zA-Z0-9\_]+)\}!$parser->{$1}!g;
+
+	# send the mail
+	#
+	$self->log(LOGDEBUG, "Opening connection to mailhost '" . $self->{config}->{_mailhost} . "'");
+
+	$starttime = time();
+
+	$smtp = Net::SMTP->new($self->{config}->{_mailhost}, Timeout => 30);
+
+	unless ($smtp) {
+	
+		$self->log(LOGCRIT, "Critical: unable to connect to defined mailhost '" . $self->{config}->{_mailhost}. "'. Please make sure that we can connect to this server!");
+		
+		return undef;
+	}
+
+	$smtp->mail($parser->{mail_from});	# mail from
+	$smtp->to($sender_email);			# rcpt to
+
+	$smtp->data();
+	
+	$smtp->datasend("From: <" . $parser->{mail_from} . ">\n");
+	$smtp->datasend("To: <$sender_email>\n");
+	$smtp->datasend("Precedence: bulk\n");
+	$smtp->datasend("X-Mailer: CAPTCHA <autowhitelist_captcha/Qpsmtpd>\n");
+	$smtp->datasend("Date: " . strftime("%d %b %y %H:%M:%S GMT", gmtime(time)) . "\n");
+	$smtp->datasend("Message-Id: <" . &make_random_hash() . "\@" . $domain . ">\n");
+
+	# MIME stuff
+	$smtp->datasend("Content-Type: multipart/alternative; boundary=CAPTCHA-Mail-2-" . $parser->{boundary} . "\n");
+	$smtp->datasend("Mime-Version: 1.0\n");
+
+	# make the mail important ;)
+	#
+	$smtp->datasend("X-Priority: 1\n");
+
+	$smtp->datasend("Subject: CAPTCHA autowhitelist\n\n");
+
+	$smtp->datasend($template);		# send the mailbody
+
+	$smtp->dataend();
+	$smtp->quit;
+
+	$self->log(LOGDEBUG, "OK, CAPTCHA mail has been sent to '$sender_email' in " . (time() - $starttime) . " seconds! Returning md5='$md5'");
+	
+	undef $smtp;
+	undef $parser;
+	                        
+	return $md5;
+}
+
+sub pendingDatabase {
+
+	# this function handls the pending database which is a DBM database. DB_File::Lock is used to lock the db
+	# and make sure that not more than one instance at the same time opens and writes to it.
+	#
+	my ($c) = shift;
+	my ($email, $counter, $md5, %db, $db);
+
+	unless ($c->{action} && ($c->{md5} || $c->{email})) { return undef; }
+
+	tie(%db, 'DB_File::Lock', 'config/autowhitelist_captcha.pending', O_RDWR|O_CREAT, 0600, $DB_HASH, 'write') || return undef;
+
+	if ($c->{action} eq "add") {
+	
+		$db{$c->{email}} = $c->{md5} . ':0';
+		
+	} elsif ($c->{action} eq "delete") {
+
+		if ($c->{email}) {
+
+			delete $db{$c->{email}};
+			
+		} else {
+		
+			foreach $email (keys %db) {
+			
+				($md5, $counter) = ($db{$email} =~ m!^([^\:]+)\:(\d+)!);
+
+				if ($md5 eq $c->{md5}) { delete $db{$c->{email}}; return 1; }
+			}
+		}
+	
+	} elsif ($c->{action} eq "get") {
+
+		if ($c->{email} && $db{$c->{email}}) {
+		
+			($md5, $counter) = ($db{$c->{email}} =~ m!^([^\:]+)\:(\d+)!);
+			
+			return ($md5, $c->{email}, $counter);
+			
+		} elsif ($c->{md5}) {
+
+			foreach $email (keys %db) {
+		
+				($md5, $counter) = ($db{$email} =~ m!^([^\:]+)\:(\d+)!);
+	
+				if ($md5 eq $c->{md5}) { return ($md5, $email, $counter); }
+			}
+
+		} else {
+
+			return (undef, undef, 0);
+		}
+
+	} elsif ($c->{action} eq "set") {
+	
+		$db{$c->{email}} = $c->{md5} . ':' . $c->{counter};
+	}
+
+	untie (%db);
+
+	return 1;
+}
+
+sub random {
+
+	# returns a random integer between 10 and 60
+	#
+    srand( time() ^ ($$ + ($$ << 15)) );
+    return (10 + int(rand 50));
+}
+
+sub make_random_hash {
+
+    # creates a random hash with length of n bytes. default is 10.
+    #
+    my ($length) = @_;
+    my ($random_hash, $i);
+
+    unless ($length) { $length = 10; }
+
+    # rand init
+    srand( time() ^ ($$ + ($$ << 15)) );
+
+    for ($i = 1; $i <= $length; $i++) {
+
+        $random_hash .= join '', (0..9, 'A'..'Z', 'a'..'z')[rand(62)];
+    }
+
+    return $random_hash;
+}
+
+sub mygrep {
+
+	my ($search_term, $search_array_ref) = @_;
+
+	foreach (@{$search_array_ref}) {
+		
+		if (/$search_term/i) { return 1; }
+	}
+
+	return undef;
+}
+
+1;

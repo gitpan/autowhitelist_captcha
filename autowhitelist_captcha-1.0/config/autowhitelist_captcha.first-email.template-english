@@ -1,0 +1,80 @@
+--CAPTCHA-Mail-2-{autowhitelist_captcha:boundary}
+Content-Type: text/plain;
+        charset=UTF-8;
+        format=flowed
+Content-Transfer-Encoding: 8bit
+
+Hello,
+
+you receive this e-mail as an automatic response to your e-mail
+to {autowhitelist_captcha:rctp_email}. Because this is your
+first e-mail to the recipient, we'd like to ask you to solve
+a so called "Captcha" and send the result as a reply to this
+e-mail. After you've done this, you will be never asked again
+to solve such a Captcha and you're free to mail with the
+recipient.
+
+Please write the numbers and letters that you see in the attached
+Captcha image between the following brackets: [          ]
+
+Thank you so much for your understanding! It really helps the
+recipient to not receive any unwanted commercial e-mails any-
+more. Captchas are widely known and used on many web-sites and
+message boards to protect them from Spam. So it makes sense
+to use this efficient system also for e-mail.
+                
+
+--CAPTCHA-Mail-2-{autowhitelist_captcha:boundary}
+Content-Type: multipart/related;
+        boundary=CAPTCHA-Mail-3-{autowhitelist_captcha:boundary};
+        type="text/html"
+
+
+--CAPTCHA-Mail-3-{autowhitelist_captcha:boundary}
+Content-Type: text/html;
+        charset=UTF-8
+Content-Transfer-Encoding: 8bit
+
+<html><head>
+<meta http-equiv="content-type" content="text/html; charset=UTF-8">
+<title>CAPTCHA autowhitelist</title>
+</head>
+<body>
+
+<div style="text-align: left;font-size: 13px; ">
+Hello,<p>
+
+you receive this e-mail as an automatic response to your e-mail
+to {autowhitelist_captcha:rctp_email}. Because this is your
+first e-mail to the recipient, we'd like to ask you to solve
+a so called "Captcha" and send the result as a reply to this 
+e-mail. After you've done this, you will be never asked again
+to solve such a Captcha and you're free to mail with the
+recipient.<p>
+
+Please write the numbers and letters that you see in the attached
+Captcha image between the following brackets: [&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;]<p>
+
+<img src="cid:16B8A8A3-4223-4CBF-9B39-B8D15E0F1FAA/captcha.png"><p>
+
+Thank you so much for your understanding! It really helps the
+recipient to not receive any unwanted commercial e-mails any-
+more. Captchas are widely known and used on many web-sites and
+message boards to protect them from Spam. So it makes sense
+to use this efficient system also for e-mail.<p>
+</div>
+</body></html>
+
+--CAPTCHA-Mail-3-{autowhitelist_captcha:boundary}
+Content-Disposition: inline;
+        filename=captcha.png
+Content-Transfer-Encoding: base64
+Content-Type: image/png;
+        name="captcha.png"
+Content-Id: <16B8A8A3-4223-4CBF-9B39-B8D15E0F1FAA/captcha.png>
+
+{autowhitelist_captcha:imageBASE64}
+
+--CAPTCHA-Mail-3-{autowhitelist_captcha:boundary}--
+
+--CAPTCHA-Mail-2-{autowhitelist_captcha:boundary}--

@@ -1,0 +1,27 @@
+# config for autowhitelist_captcha
+#
+
+# one or more whitelist=/path/to/whitelist
+#
+whitelist=config/relayclients
+whitelist=/usr/local/exim/local.networks
+
+# email templates for initial and failure CAPTCHA emails
+#
+firstmail_template=config/autowhitelist_captcha.first-email.template
+failure_template=config/autowhitelist_captcha.failure.template
+success_template=config/autowhitelist_captcha.success.template
+
+# local mailserver for ougoing CAPTCHA emails
+#
+mailhost=localhost:2525
+
+# whitelisting only for the following maildomains:
+#
+whitelist_domain=mydomain.com
+whitelist_domain=test.de
+
+# whitelisting only for the following emails:
+#
+whitelist_email=user@mydomain.org
+whitelist_email=user@test.com

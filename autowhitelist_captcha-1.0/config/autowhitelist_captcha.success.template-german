@@ -1,0 +1,52 @@
+--CAPTCHA-Mail-2-{autowhitelist_captcha:boundary}
+Content-Type: text/plain;
+        charset=UTF-8;
+        format=flowed
+Content-Transfer-Encoding: 8bit
+
+Guten Tag,
+
+vielen Dank für Ihre Antwort. Das Captcha wurde erfolgreich gelöst
+und Sie sind ab sofort für die Email-Kommunikation mit dem Empfänger
+freigeschaltet.
+
+Bitte denken Sie daran Ihre erste e-Mail erneut zu senden damit sie
+den Empfänger erreicht.
+
+Vielen Dank für Ihre Mühe und Ihr Verständnis.
+                
+
+--CAPTCHA-Mail-2-{autowhitelist_captcha:boundary}
+Content-Type: multipart/related;
+        boundary=CAPTCHA-Mail-3-{autowhitelist_captcha:boundary};
+        type="text/html"
+
+
+--CAPTCHA-Mail-3-{autowhitelist_captcha:boundary}
+Content-Type: text/html;
+        charset=UTF-8
+Content-Transfer-Encoding: 8bit
+
+<html><head>
+<meta http-equiv="content-type" content="text/html; charset=UTF-8">
+<title>CAPTCHA autowhitelist</title>
+</head>
+<body>
+
+<div style="text-align: left;font-size: 13px; ">
+Guten Tag,<p>
+
+vielen Dank für Ihre Antwort. Das Captcha wurde erfolgreich gelöst  
+und Sie sind ab sofort für die Email-Kommunikation mit dem Empfänger
+freigeschaltet.<p>
+
+Bitte denken Sie daran Ihre erste e-Mail erneut zu senden damit sie
+den Empfänger erreicht.<p>
+
+Vielen Dank für Ihre Mühe und Ihr Verständnis.<p>
+</div>
+</body></html>
+
+--CAPTCHA-Mail-3-{autowhitelist_captcha:boundary}--
+
+--CAPTCHA-Mail-2-{autowhitelist_captcha:boundary}--

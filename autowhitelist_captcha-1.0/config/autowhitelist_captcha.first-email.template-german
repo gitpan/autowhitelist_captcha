@@ -1,0 +1,93 @@
+--CAPTCHA-Mail-2-{autowhitelist_captcha:boundary}
+Content-Type: text/plain;
+        charset=UTF-8;
+        format=flowed
+Content-Transfer-Encoding: 8bit
+
+Guten Tag,
+
+Sie bekommen diese email als automatische Antwort auf ihre email
+an {autowhitelist_captcha:rctp_email}. Da es sich anscheinend um Ihre
+erste e-Mail an diesen Empfänger handelt, werden Sie gebeten ein
+sogenanntes "Captcha" zu lösen und als Antwort auf diese e-Mail
+zu senden. Sie werden dann in eine Liste eingetragen und können
+anschliessend e-Mails an {autowhitelist_captcha:rctp_email} senden
+ohne jemals wieder solch ein Captcha lösen zu müssen.
+
+Bitte denken Sie auch daran Ihre erste e-Mail anschliessend erneut
+zu senden, damit diese beim Empfänger ankommt.
+
+Bitte tragen Sie die nachfolgende Buchstaben- und Zahlenfolge, die
+Sie in der der email angehängten Grafik sehen, zwischen den eckigen
+Klammern ein: [          ]
+
+
+Vielen Dank für Ihr Verständnis und Ihre Mühe.
+
+Zu Ihrer Information: das Captcha-System verhindert zuverlässig
+unerwünschte Werbe-emails. Aus diesem Grund hat sich der Empfänger
+entschieden diese Art von Schutz einzusetzen. Captchas werden
+mittlerweile von vielen Webseiten und Foren zum Schutz vor Spam
+eingesetzt und auch bei e-Mails macht dieser Schutz durchaus Sinn.
+
+                
+
+--CAPTCHA-Mail-2-{autowhitelist_captcha:boundary}
+Content-Type: multipart/related;
+        boundary=CAPTCHA-Mail-3-{autowhitelist_captcha:boundary};
+        type="text/html"
+
+
+--CAPTCHA-Mail-3-{autowhitelist_captcha:boundary}
+Content-Type: text/html;
+        charset=UTF-8
+Content-Transfer-Encoding: 8bit
+
+<html><head>
+<meta http-equiv="content-type" content="text/html; charset=UTF-8">
+<title>CAPTCHA autowhitelist</title>
+</head>
+<body>
+
+<div style="text-align: left;font-size: 13px; ">
+Guten Tag,<p>
+
+Sie bekommen diese email als automatische Antwort auf ihre email
+an {autowhitelist_captcha:rctp_email}. Da es sich anscheinend um Ihre
+erste e-Mail an diesen Empfänger handelt, werden Sie gebeten ein
+sogenanntes "Captcha" zu lösen und als Antwort auf diese e-Mail
+zu senden. Sie werden dann in eine Liste eingetragen und können
+anschliessend e-Mails an {autowhitelist_captcha:rctp_email} senden
+ohne jemals wieder solch ein Captcha lösen zu müssen.<p>
+
+Bitte denken Sie auch daran Ihre erste e-Mail anschliessend erneut
+zu senden, damit diese beim Empfänger ankommt.<p>
+
+Bitte tragen Sie die nachfolgende Buchstaben- und Zahlenfolge, die
+Sie in der Grafik sehen, zwischen den <b>eckigen Klammern</b> ein: [&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;]<p>
+
+<img src="cid:16B8A8A3-4223-4CBF-9B39-B8D15E0F1FAA/captcha.png"><p>
+
+Vielen Dank für Ihr Verständnis und Ihre Mühe.<p>
+
+Zu Ihrer Information: das Captcha-System verhindert zuverlässig
+unerwünschte Werbe-emails. Aus diesem Grund hat sich der Empfänger
+entschieden diese Art von Schutz einzusetzen. Captchas werden
+mittlerweile von vielen Webseiten und Foren zum Schutz vor Spam
+eingesetzt und auch bei e-Mails macht dieser Schutz durchaus Sinn.<p>
+</div>
+</body></html>
+
+--CAPTCHA-Mail-3-{autowhitelist_captcha:boundary}
+Content-Disposition: inline;
+        filename=captcha.png
+Content-Transfer-Encoding: base64
+Content-Type: image/png;
+        name="captcha.png"
+Content-Id: <16B8A8A3-4223-4CBF-9B39-B8D15E0F1FAA/captcha.png>
+
+{autowhitelist_captcha:imageBASE64}
+
+--CAPTCHA-Mail-3-{autowhitelist_captcha:boundary}--
+
+--CAPTCHA-Mail-2-{autowhitelist_captcha:boundary}--
